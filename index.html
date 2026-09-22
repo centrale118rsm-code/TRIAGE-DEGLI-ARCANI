@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
-<title>Arcanomachia</title>
+<title>Il Triage degli Arcani</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700&family=EB+Garamond:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
@@ -835,7 +835,7 @@ footer.credits{
   <div id="summon-vignette"></div>
 
   <div class="topbar">
-    <h1 class="topbar__title">Arcanomachia<small>la guerra suprema dei tarocchi</small></h1>
+    <h1 class="topbar__title">Il Triage degli Arcani<small>la guerra suprema dei tarocchi</small></h1>
     <button class="btn-icon" id="btn-rules">Regolamento</button>
   </div>
 
@@ -882,13 +882,13 @@ footer.credits{
 
   <div class="log-wrap" id="log"></div>
 
-  <footer class="credits">ARCANOMACHIA &middot; 45 arcani &middot; 20 Epocali &middot; 25 Normali</footer>
+  <footer class="credits">IL TRIAGE DEGLI ARCANI &middot; 45 arcani &middot; 20 Epocali &middot; 25 Normali</footer>
 </div>
 
 <!-- ===================== REAL-CARD COMPANION SCREEN ===================== -->
 <div class="app" id="screen-real">
   <div class="topbar">
-    <h1 class="topbar__title">Arcanomachia<small>strumento per carte reali</small></h1>
+    <h1 class="topbar__title">Il Triage degli Arcani<small>strumento per carte reali</small></h1>
     <button class="btn-icon" id="btn-rules-real">Regolamento</button>
   </div>
   <p style="font-size:0.76rem; color:var(--parchment-dim); text-align:center; margin:0;">
@@ -937,7 +937,7 @@ footer.credits{
 <!-- ===================== START / MODE MENU ===================== -->
 <div class="overlay start-overlay" id="start-overlay">
   <div class="overlay__panel">
-    <h2>Arcanomachia</h2>
+    <h2>Il Triage degli Arcani</h2>
     <p>45 arcani. Due ranghi di potere. Un solo vincitore. Scegli come vuoi combattere.</p>
     <div class="mode-list">
       <div class="mode-btn" id="btn-mode-bot">
@@ -2890,7 +2890,7 @@ function wireEvents(){
   document.getElementById('btn-whatsapp-invite').addEventListener('click', ()=>{
     const code = document.getElementById('online-code-display').textContent.trim();
     const url = location.origin + location.pathname + '?code=' + code;
-    const text = encodeURIComponent('🃏 Ti sfido ad ARCANOMACHIA! Unisciti alla mia partita con il codice ' + code + ', oppure apri direttamente questo link: ' + url);
+    const text = encodeURIComponent('🃏 Ti sfido a IL TRIAGE DEGLI ARCANI! Unisciti alla mia partita con il codice ' + code + ', oppure apri direttamente questo link: ' + url);
     window.open('https://wa.me/?text=' + text, '_blank');
   });
 
