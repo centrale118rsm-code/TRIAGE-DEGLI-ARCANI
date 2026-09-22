@@ -75,10 +75,14 @@ h1,h2,h3, .display{
   display:flex;
   align-items:center;
   justify-content:space-between;
+  flex-wrap: wrap;
+  gap: 6px 8px;
   padding: 4px 2px 8px;
   border-bottom: 1px solid var(--line);
 }
 .topbar__title{
+  flex: 1 1 auto;
+  min-width: 0;
   font-size: 1.25rem;
   color: var(--gold-bright);
   margin:0;
@@ -97,9 +101,11 @@ h1,h2,h3, .display{
   border: 1px solid var(--line);
   color: var(--gold-bright);
   border-radius: 6px;
-  padding: 7px 12px;
+  padding: 7px 10px;
   font-family:'Cinzel', serif;
-  font-size:0.72rem;
+  font-size:0.68rem;
+  flex-shrink: 0;
+  white-space: nowrap;
   cursor:pointer;
 }
 .btn-icon:active{ transform: translateY(1px); }
@@ -756,6 +762,57 @@ footer.credits{
   100%{ transform: translateY(100vh) rotate(540deg); opacity:0.9; }
 }
 
+/* ---------- in-battle tutorial ---------- */
+.tutorial-highlight{
+  outline: 3px solid var(--gold-bright);
+  outline-offset: 3px;
+  border-radius: 10px;
+  animation: tutorial-pulse 1.4s ease-in-out infinite;
+  position: relative;
+  z-index: 45;
+}
+@keyframes tutorial-pulse{
+  0%,100%{ box-shadow: 0 0 0 0 rgba(240,207,122,0.55); }
+  50%{ box-shadow: 0 0 0 8px rgba(240,207,122,0); }
+}
+#tutorial-banner{
+  position: fixed;
+  left: 50%;
+  bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+  transform: translateX(-50%);
+  width: min(92vw, 460px);
+  background: linear-gradient(180deg, #241b13f5, #1a130cf5);
+  border: 1px solid var(--gold);
+  border-radius: 12px;
+  padding: 12px 14px;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.6);
+  z-index: 220;
+  display: none;
+}
+#tutorial-banner.is-visible{ display: block; }
+#tutorial-banner__text{
+  font-size: 0.82rem;
+  color: var(--parchment);
+  line-height: 1.4;
+  margin-bottom: 8px;
+}
+#tutorial-banner__text b{ color: var(--gold-bright); }
+#tutorial-banner__actions{
+  display: flex;
+  justify-content: flex-end;
+}
+#btn-tutorial-skip{
+  background: none;
+  border: none;
+  color: var(--parchment-dim);
+  font-family: 'EB Garamond', serif;
+  font-style: italic;
+  font-size: 0.76rem;
+  text-decoration: underline;
+  cursor: pointer;
+  padding: 2px;
+}
+
 .fx-clash-card{
   position:fixed;
   border-radius:8px;
@@ -844,7 +901,15 @@ footer.credits{
 
   <div class="topbar">
     <h1 class="topbar__title">Il Triage degli Arcani<small>la guerra suprema dei tarocchi</small></h1>
+    <button class="btn-icon" id="btn-tutorial-start" title="Rivedi il tutorial">Tutorial</button>
     <button class="btn-icon" id="btn-rules">Regolamento</button>
+  </div>
+
+  <div id="tutorial-banner">
+    <div id="tutorial-banner__text"></div>
+    <div id="tutorial-banner__actions">
+      <button id="btn-tutorial-skip">Salta tutorial</button>
+    </div>
   </div>
 
   <div class="wait-banner" id="online-wait-banner"></div>
@@ -2043,6 +2108,7 @@ async function onlineJoin(code, name){
   viewerRole = 'player';
   hideAllOverlays();
   subscribeMatch();
+  maybeAutoStartTutorial();
 }
 
 function subscribeMatch(){
@@ -2058,7 +2124,7 @@ function subscribeMatch(){
         if(delta!==0) pushFx({type:'lp', playerIdx:pi, delta:delta});
       });
     }
-    if(mySeat===0 && data.seat1joined){ hideAllOverlays(); }
+    if(mySeat===0 && data.seat1joined){ hideAllOverlays(); maybeAutoStartTutorial(); }
     renderAll();
     if(state.over) showGameOver();
   }, err=>{
@@ -2347,6 +2413,99 @@ document.addEventListener('DOMContentLoaded', fxInit);
 function imgSrc(idx){
   const v = CARD_IMAGES[idx];
   return v.indexOf('data:')===0 ? v : ('data:image/jpeg;base64,' + v);
+}
+
+/* ===================== IN-BATTLE TUTORIAL ===================== */
+
+const TUTORIAL_SEEN_KEY = 'triage_tutorial_seen';
+let tutorialActive = false;
+let tutorialStep = null;
+
+const TUTORIAL_STEPS = {
+  selectHand: {
+    text: 'Benvenuto nel <b>Triage degli Arcani</b>! Tocca una carta della tua mano per selezionarla.',
+    highlight: ['#hand']
+  },
+  chooseSummonPos: {
+    text: 'Scegli la posizione: <b>Attacco</b> per colpire, <b>Difesa</b> per proteggerti.',
+    highlight: ['#summon-actions']
+  },
+  placedWaiting: {
+    text: 'Carta schierata! Tocca una tua carta in <b>Attacco</b> per combattere, oppure premi <b>Fine turno</b> quando hai finito.',
+    highlight: ['#field-bottom', '#btn-end-turn']
+  },
+  chooseTarget: {
+    text: 'Scegli quale carta avversaria colpire, oppure premi <b>Attacco diretto</b> se il suo campo è vuoto.',
+    highlight: ['#field-top', '#btn-direct-attack']
+  },
+  done: {
+    text: 'Hai imparato le basi. Buon duello!',
+    highlight: []
+  }
+};
+
+const TUTORIAL_TRANSITIONS = {
+  selectHand: { handSelect: 'chooseSummonPos' },
+  chooseSummonPos: { summon: 'placedWaiting' },
+  placedWaiting: { attackSelect: 'chooseTarget', endTurn: 'done' },
+  chooseTarget: { battleResolved: 'placedWaiting' }
+};
+
+function tutorialSeen(){
+  try{ return localStorage.getItem(TUTORIAL_SEEN_KEY) === '1'; } catch(e){ return true; }
+}
+function tutorialMarkSeen(){
+  try{ localStorage.setItem(TUTORIAL_SEEN_KEY, '1'); } catch(e){ /* ignore */ }
+}
+
+function maybeAutoStartTutorial(){
+  if(!tutorialSeen()) tutorialStart();
+}
+
+function tutorialStart(){
+  tutorialActive = true;
+  tutorialStep = 'selectHand';
+  renderTutorial();
+}
+
+function tutorialSkip(){
+  tutorialActive = false;
+  tutorialStep = null;
+  tutorialMarkSeen();
+  clearTutorialHighlights();
+  document.getElementById('tutorial-banner').classList.remove('is-visible');
+}
+
+function tutorialEvent(name){
+  if(!tutorialActive || !tutorialStep) return;
+  const transitions = TUTORIAL_TRANSITIONS[tutorialStep];
+  if(!transitions || !transitions[name]) return;
+  tutorialStep = transitions[name];
+  renderTutorial();
+  if(tutorialStep === 'done'){
+    tutorialMarkSeen();
+    setTimeout(()=>{
+      if(tutorialStep === 'done'){ tutorialActive = false; tutorialStep = null; clearTutorialHighlights(); document.getElementById('tutorial-banner').classList.remove('is-visible'); }
+    }, 3200);
+  }
+}
+
+function clearTutorialHighlights(){
+  document.querySelectorAll('.tutorial-highlight').forEach(el=>el.classList.remove('tutorial-highlight'));
+}
+
+function renderTutorial(){
+  const banner = document.getElementById('tutorial-banner');
+  if(!banner) return;
+  if(!tutorialActive || !tutorialStep){ banner.classList.remove('is-visible'); clearTutorialHighlights(); return; }
+  const step = TUTORIAL_STEPS[tutorialStep];
+  document.getElementById('tutorial-banner__text').innerHTML = step.text;
+  banner.classList.add('is-visible');
+  clearTutorialHighlights();
+  step.highlight.forEach(sel=>{
+    const el = document.querySelector(sel);
+    if(el) el.classList.add('tutorial-highlight');
+  });
 }
 
 function viewPerspective(){
@@ -2721,6 +2880,7 @@ function wireEvents(){
     const idx = parseInt(el.getAttribute('data-hand'),10);
     selectedHandIndex = (selectedHandIndex===idx) ? null : idx;
     selectedFieldSlot = null;
+    if(selectedHandIndex!==null) tutorialEvent('handSelect');
     renderAll();
   });
 
@@ -2734,6 +2894,7 @@ function wireEvents(){
         if(pendingSummonPosition){
           playToField(selectedHandIndex, slot, pendingSummonPosition);
           selectedHandIndex = null; pendingSummonPosition = null;
+          tutorialEvent('summon');
           renderAll();
           if(state.mode==='online') pushOnlineState();
         }
@@ -2744,6 +2905,7 @@ function wireEvents(){
     if(card && card.position==='atk' && !card.attacked){
       selectedFieldSlot = (selectedFieldSlot===slot) ? null : slot;
       selectedHandIndex = null;
+      if(selectedFieldSlot!==null) tutorialEvent('attackSelect');
       renderAll();
     }
   });
@@ -2759,6 +2921,7 @@ function wireEvents(){
     if(!state.players[1-state.current].field[slot]) return;
     resolveBattle(selectedFieldSlot, slot);
     selectedFieldSlot = null;
+    tutorialEvent('battleResolved');
     renderAll();
     if(state.mode==='online') pushOnlineState();
   });
@@ -2770,6 +2933,7 @@ function wireEvents(){
     if(selectedFieldSlot===null) return;
     resolveBattle(selectedFieldSlot, null);
     selectedFieldSlot = null;
+    tutorialEvent('battleResolved');
     renderAll();
     if(state.mode==='online') pushOnlineState();
   });
@@ -2781,6 +2945,7 @@ function wireEvents(){
 
   document.getElementById('btn-end-turn').addEventListener('click', ()=>{
     clearSelection();
+    tutorialEvent('endTurn');
     endTurn();
   });
 
@@ -2793,6 +2958,10 @@ function wireEvents(){
   document.getElementById('btn-rules').addEventListener('click', ()=>{
     document.getElementById('rules-overlay').style.display = 'flex';
   });
+  document.getElementById('btn-tutorial-start').addEventListener('click', ()=>{
+    tutorialStart();
+  });
+  document.getElementById('btn-tutorial-skip').addEventListener('click', tutorialSkip);
   document.getElementById('btn-close-rules').addEventListener('click', ()=>{
     document.getElementById('rules-overlay').style.display = 'none';
   });
@@ -2805,6 +2974,9 @@ function wireEvents(){
     if(onlineUnsub){ onlineUnsub(); onlineUnsub=null; }
     matchRef = null;
     viewerRole = 'player';
+    tutorialActive = false; tutorialStep = null;
+    document.getElementById('tutorial-banner').classList.remove('is-visible');
+    clearTutorialHighlights();
     showScreen('duel');
     document.getElementById('start-overlay').style.display = 'flex';
   });
@@ -2843,6 +3015,7 @@ function wireEvents(){
       newGame('bot', {name1:name, name2:'Computer', botDifficulty:diff});
       showScreen('duel');
       renderAll();
+      maybeAutoStartTutorial();
     });
   });
 
@@ -2854,6 +3027,7 @@ function wireEvents(){
     newGame('hotseat', {name1:n1, name2:n2});
     showScreen('duel');
     renderAll();
+    maybeAutoStartTutorial();
   });
 
   /* ---- online lobby ---- */
